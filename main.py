@@ -22,8 +22,8 @@ b: toggle break
 both triggers: kill switch
 """
 
-breakMap = {True:b'BREAK',
- False:b'UNBREAK'}
+breakMap = {True:b'BREAK\n',
+ False:b'UNBREAK\n'}
 
 while(not killSwitch):
     lastBreakState = breaking
@@ -42,7 +42,7 @@ while(not killSwitch):
                 rightKill = True
     if(leftKill and rightKill):
         killSwitch = True
-        arduino.write(b'KILL')
+        arduino.write(b'KILL\n')
         break
     if(breaking != lastBreakState):
         arduino.write(breakMap[breaking])
