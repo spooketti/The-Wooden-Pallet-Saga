@@ -13,29 +13,31 @@ joystick.init()
 
 leftKill = False
 rightKill = False
-breaking = True
+brakeing = True
 
 """
 Controls: 
 leftstick drive accelerate forward/backward
-b: toggle break
+b: toggle brake
 both triggers: kill switch
 """
 
-breakMap = {True:b'BREAK\n',
- False:b'UNBREAK\n'}
+brakeMap = {True:b'BRAKE\n',
+ False:b'UNBRAKE\n'}
 
 while(not killSwitch):
-    lastBreakState = breaking
+    lastbrakeState = brakeing
     leftKill = False
     rightKill = False
     for event in pygame.event.get():
-        if event.type == pygame.JOYAXISMOTION:
+        if event.type == pygame.JOYAXISMOTION: #TODO: this has problems with the arduino deadman (0 is not an event most likely)
+            #even though this script will most likely get converted into display data anyway cause of
+            #arduino libraries for xbox input
             if event.axis == 1:
                 print(event.value)
         if event.type == pygame.JOYBUTTONDOWN:
             if event.button == pygame.CONTROLLER_BUTTON_B:
-                breaking = not breaking
+                brakeing = not brakeing
             if event.button == pygame.CONTROLLER_BUTTON_LEFTSHOULDER:
                 leftKill = True
             if event.button == pygame.CONTROLLER_BUTTON_RIGHTSHOULDER:
@@ -44,7 +46,7 @@ while(not killSwitch):
         killSwitch = True
         arduino.write(b'KILL\n')
         break
-    if(breaking != lastBreakState):
-        arduino.write(breakMap[breaking])
+    if(brakeing != lastbrakeState):
+        arduino.write(brakeMap[brakeing])
     arduino.write(f"{joystickPos}\n".encode('utf-8'))
     time.sleep(0.05) 
