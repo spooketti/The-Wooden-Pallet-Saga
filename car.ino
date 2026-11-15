@@ -1,19 +1,38 @@
 #include <Bluepad32.h>
+const int brakeLeftPin = NULL;
+const int brakeRightPin = NULL;
+const int dirLeftPin = NULL;
+const int dirRightPin = NULL;
+const int speedLeftPin = NULL;
+const int speedRightPin = NULL;
+
+const int MAX_CONTROLLER = NULL;
+const int MAX_SPEED = 255;
+
+double maxSpeed = 0;
+double throttle = 0;
+bool isReverse = false;
+bool isBrake = true;
+
+void drive(int PWM){
+  analogWrite(speedLeftPin,PWM);
+  analogWrite(speedRightPin,PWM);
+}
+
+void brake(){
+  drive(0);
+  maxSpeed = 0;
+}
 
 ControllerPtr myControllers[BP32_MAX_GAMEPADS];
 
-// This callback gets called any time a new gamepad is connected.
-// Up to 4 gamepads can be connected at the same time.
 void onConnectedController(ControllerPtr ctl) {
     bool foundEmptySlot = false;
     for (int i = 0; i < BP32_MAX_GAMEPADS; i++) {
         if (myControllers[i] == nullptr) {
             Serial.printf("CALLBACK: Controller is connected, index=%d\n", i);
-            // Additionally, you can get certain gamepad properties like:
-            // Model, VID, PID, BTAddr, flags, etc.
             ControllerProperties properties = ctl->getProperties();
-            Serial.printf("Controller model: %s, VID=0x%04x, PID=0x%04x\n", ctl->getModelName().c_str(), properties.vendor_id,
-                           properties.product_id);
+            Serial.printf("Controller model: %s, VID=0x%04x, PID=0x%04x\n", ctl->getModelName().c_str(), properties.vendor_id,properties.product_id);
             myControllers[i] = ctl;
             foundEmptySlot = true;
             break;
@@ -127,6 +146,7 @@ void processControllers() {
         if (myController && myController->isConnected() && myController->hasData()) {
             if (myController->isGamepad()) {
                 processGamepad(myController);
+            }
         }
     }
 }
@@ -158,8 +178,6 @@ void setup() {
 
 // Arduino loop function. Runs in CPU 1.
 void loop() {
-    // This call fetches all the controllers' data.
-    // Call this function in your main loop.
     bool dataUpdated = BP32.update();
     if (dataUpdated)
         processControllers();
