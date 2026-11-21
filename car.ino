@@ -14,6 +14,7 @@ double maxSpeed = 0;
 double throttle = 0;
 bool isReverse = false;
 bool isBrake = false;
+int stickEpsilon = 4;
 
 void drive(int PWM){
   analogWrite(speedLeftPin,PWM);
@@ -24,6 +25,14 @@ void brake(){
   throttle = 0;
   drive(0);
   maxSpeed = 0;
+}
+
+double getStickValue(double stick){
+    stick = -stick;
+    if(-epsilon < stick && stick < epsilon){
+        return 0;
+    }
+    return stick;
 }
 
 ControllerPtr myControllers[BP32_MAX_GAMEPADS];
@@ -82,8 +91,8 @@ void processGamepad(ControllerPtr ctl) {
         return;
     }
     
-    throttle = map(max(ctl->axisY()*-1,0), 0, MAX_CONTROLLER, 0, 1);
-    double stickNorm = constrain((double)(ctl->axisRY() * -1) / MAX_CONTROLLER, -1.0, 1.0);
+    throttle = map(max(getStickValue(ctl->axisY())), 0, MAX_CONTROLLER, 0, 1);
+    double stickNorm = constrain(getStickValue(ctl->axisRY()) / MAX_CONTROLLER, -1.0, 1.0);
     double change = stickNorm * MAX_SPEED_GROWTH;
     maxSpeed = constrain(maxSpeed + change, 0.0, MAX_SPEED);
 
