@@ -6,13 +6,14 @@ const int dirRightPin = NULL;
 const int speedLeftPin = NULL;
 const int speedRightPin = NULL;
 
-const int MAX_CONTROLLER = NULL;
-const int MAX_SPEED = 255;
+const int MAX_CONTROLLER = 512;
+const double MAX_SPEED = 255;
+const double MAX_SPEED_GROWTH = MAX_SPEED/(500);
 
 double maxSpeed = 0;
 double throttle = 0;
 bool isReverse = false;
-bool isBrake = true;
+bool isBrake = false;
 
 void drive(int PWM){
   analogWrite(speedLeftPin,PWM);
@@ -20,6 +21,7 @@ void drive(int PWM){
 }
 
 void brake(){
+  throttle = 0;
   drive(0);
   maxSpeed = 0;
 }
@@ -58,10 +60,53 @@ void onDisconnectedController(ControllerPtr ctl) {
     if (!foundController) {
         Serial.println("CALLBACK: Controller disconnected, but not found in myControllers");
     }
+    isBrake = true;
 }
 
-void dumpGamepad(ControllerPtr ctl) {
-//     Serial.printf(
+void processGamepad(ControllerPtr ctl) {
+    //  a(), b(), x(), y(), l1(), etc...
+    if (ctl->a()) {
+        isBrake = true;
+        if(ctl->b()){
+            isBrake = false;
+            ctl->setColorLED(0,0,0);
+            return;
+        }
+        if(isBrake){
+            ctl->setColorLED(255, 0, 0);
+        }
+    }
+
+    if(isBrake){
+        brake();
+        return;
+    }
+    
+    throttle = map(max(ctl->axisY()*-1,0), 0, MAX_CONTROLLER, 0, 1);
+    double stickNorm = constrain((double)(ctl->axisRY() * -1) / MAX_CONTROLLER, -1.0, 1.0);
+    double change = stickNorm * MAX_SPEED_GROWTH;
+    maxSpeed = constrain(maxSpeed + change, 0.0, MAX_SPEED);
+
+    static int led = 0;
+    led = (int)round((maxSpeed / (255/4))) % 4;
+
+    if(maxSpeed>225){
+        led = 4;
+    }
+
+    ctl->setPlayerLEDs(led & 0x0f);
+
+    /*
+    //ACTUALLY POWERS THE MOTOR
+    drive(throttle*maxSpeed);
+    */
+
+    //ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,
+    //                         0x40 /* strongMagnitude */);
+
+    // Another way to query controller data is by getting the buttons() function.
+    // See how the different "dump*" functions dump the Controller info.
+    //  Serial.printf(
 //         "idx=%d, dpad: 0x%02x, buttons: 0x%04x, axis L: %4d, %4d, axis R: %4d, %4d, brake: %4d, throttle: %4d, "
 //         "misc: 0x%02x, gyro x:%6d y:%6d z:%6d, accel x:%6d y:%6d z:%6d\n",
 //         ctl->index(),        // Controller Index
@@ -81,65 +126,7 @@ void dumpGamepad(ControllerPtr ctl) {
 //         ctl->accelY(),       // Accelerometer Y
 //         ctl->accelZ()        // Accelerometer Z
 //     );
-
-//      throttle = max(throttle,0);
-
-//   throttle = map(max(ctl->axisY(),0), 0, 512, 0, 50);
-    analogWrite(18,map(max(ctl->axisY(),0), 0, 512, 0, 50));
-    analogWrite(23,map(max(ctl->axisRY(),0), 0, 512, 0, 50));
 }
-
-
-void processGamepad(ControllerPtr ctl) {
-    // There are different ways to query whether a button is pressed.
-    // By query each button individually:
-    //  a(), b(), x(), y(), l1(), etc...
-    if (ctl->a()) {
-        static int colorIdx = 0;
-        // Some gamepads like DS4 and DualSense support changing the color LED.
-        // It is possible to change it by calling:
-        switch (colorIdx % 3) {
-            case 0:
-                // Red
-                ctl->setColorLED(255, 0, 0);
-                break;
-            case 1:
-                // Green
-                ctl->setColorLED(0, 255, 0);
-                break;
-            case 2:
-                // Blue
-                ctl->setColorLED(0, 0, 255);
-                break;
-        }
-        colorIdx++;
-    }
-
-    if (ctl->b()) {
-        // Turn on the 4 LED. Each bit represents one LED.
-        static int led = 0;
-        led++;
-        // Some gamepads like the DS3, DualSense, Nintendo Wii, Nintendo Switch
-        // support changing the "Player LEDs": those 4 LEDs that usually indicate
-        // the "gamepad seat".
-        // It is possible to change them by calling:
-        ctl->setPlayerLEDs(led & 0x0f);
-    }
-
-    if (ctl->x()) {
-        // Some gamepads like DS3, DS4, DualSense, Switch, Xbox One S, Stadia support rumble.
-        // It is possible to set it by calling:
-        // Some controllers have two motors: "strong motor", "weak motor".
-        // It is possible to control them independently.
-        ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,
-                            0x40 /* strongMagnitude */);
-    }
-
-    // Another way to query controller data is by getting the buttons() function.
-    // See how the different "dump*" functions dump the Controller info.
-    dumpGamepad(ctl);
-}
-
 
 void processControllers() {
     for (auto myController : myControllers) {
@@ -151,14 +138,11 @@ void processControllers() {
     }
 }
 
-// Arduino setup function. Runs in CPU 1
 void setup() {
     Serial.begin(115200);
     Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
     const uint8_t* addr = BP32.localBdAddress();
     Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
-
-    // Setup the Bluepad32 callbacks
     BP32.setup(&onConnectedController, &onDisconnectedController);
 
     // "forgetBluetoothKeys()" should be called when the user performs
@@ -176,7 +160,6 @@ void setup() {
     BP32.enableVirtualDevice(false);
 }
 
-// Arduino loop function. Runs in CPU 1.
 void loop() {
     bool dataUpdated = BP32.update();
     if (dataUpdated)
