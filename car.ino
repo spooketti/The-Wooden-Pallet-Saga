@@ -1,4 +1,6 @@
 #include <Bluepad32.h>
+#define DPAD_UP     0x01
+#define DPAD_DOWN   0x02
 const int brakeLeftPin = NULL;
 const int brakeRightPin = NULL;
 const int dirLeftPin = NULL;
@@ -9,6 +11,7 @@ const int speedRightPin = NULL;
 const int MAX_CONTROLLER = 512;
 const double MAX_SPEED = 255;
 const double MAX_SPEED_GROWTH = MAX_SPEED/(500);
+const double REVERSE_MAX_SPEED = 25;
 
 double maxSpeed = 0;
 double throttle = 0;
@@ -22,6 +25,8 @@ void drive(int PWM){
 }
 
 void brake(){
+  digitalWrite(brakeLeftPin,HIGH);
+  digitalWrite(brakeRightPin,HIGH);
   throttle = 0;
   drive(0);
   maxSpeed = 0;
@@ -87,14 +92,25 @@ void processGamepad(ControllerPtr ctl) {
     }
 
     if(isBrake){
-        brake();
-        return;
+       if(ctl->dpad() & DPAD_UP){
+        isReverse = false;
+        ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,0x40 /* strongMagnitude */);
+       }
+       if(ctl->dpad() & DPAD_DOWN){
+        ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,0x40 /* strongMagnitude */);
+        isReverse = true;
+       }
+       return;
     }
     
     throttle = map(max(getStickValue(ctl->axisY())), 0, MAX_CONTROLLER, 0, 1);
     double stickNorm = constrain(getStickValue(ctl->axisRY()) / MAX_CONTROLLER, -1.0, 1.0);
     double change = stickNorm * MAX_SPEED_GROWTH;
     maxSpeed = constrain(maxSpeed + change, 0.0, MAX_SPEED);
+
+    if(isReverse){
+        maxSpeed = min(REVERSE_MAX_SPEED,maxSpeed);
+    }
 
     static int led = 0;
     led = (int)round((maxSpeed / (255/4))) % 4;
@@ -104,17 +120,8 @@ void processGamepad(ControllerPtr ctl) {
     }
 
     ctl->setPlayerLEDs(led & 0x0f);
-
-    /*
-    //ACTUALLY POWERS THE MOTOR
     drive(throttle*maxSpeed);
-    */
 
-    //ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,
-    //                         0x40 /* strongMagnitude */);
-
-    // Another way to query controller data is by getting the buttons() function.
-    // See how the different "dump*" functions dump the Controller info.
     //  Serial.printf(
 //         "idx=%d, dpad: 0x%02x, buttons: 0x%04x, axis L: %4d, %4d, axis R: %4d, %4d, brake: %4d, throttle: %4d, "
 //         "misc: 0x%02x, gyro x:%6d y:%6d z:%6d, accel x:%6d y:%6d z:%6d\n",
@@ -170,9 +177,24 @@ void setup() {
 }
 
 void loop() {
+
+    if(isReverse){
+        digitalWrite(dirLeftPin,LOW);
+        digitalWrite(dirRightPin,HIGH); 
+    }
+    else{
+        digitalWrite(dirLeftPin,HIGH);
+        digitalWrite(dirRightPin,LOW); 
+    }
+    if(isBrake){
+        brake();
+    }
+
     bool dataUpdated = BP32.update();
     if (dataUpdated)
         processControllers();
+
+    
 
     // The main loop must have some kind of "yield to lower priority task" event.
     // Otherwise, the watchdog will get triggered.
